@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/disintegration/imaging"
 )
@@ -17,6 +18,19 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
+func getImgName(url string) string {
+	units := strings.Split(url, "/")
+	return units[len(units)-1]
+}
+
+func getImgWidthAndHeight(img image.Image) (int, int) {
+	ib := img.Bounds()
+	iw := ib.Max.X
+	ih := ib.Max.Y
+
+	return iw, ih
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	imgURL := r.FormValue("url")
 
@@ -25,31 +39,32 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resImg, error := http.Get(imgURL)
+	resImg, getImgErr := http.Get(imgURL)
 
-	if error != nil {
+	if getImgErr != nil {
 		http.Error(w, "Oops, we couldn't find image with this url: "+imgURL, http.StatusNotFound)
 	}
 
 	defer resImg.Body.Close()
 
-	imageData, err := ioutil.ReadAll(resImg.Body)
+	imageData, rBuffErr := ioutil.ReadAll(resImg.Body)
 
-	if err != nil {
+	if rBuffErr != nil {
 		http.Error(w, "Oops, we're having trouble reading from this url: "+imgURL, http.StatusNotFound)
 	}
 
-	// You can now save it to disk or whatever...
-	// try image.NewNRGBA or similar to avoid saving to disk
-	// and operate in memory
-	ioutil.WriteFile("./test.jpg", imageData, 0666)
+	iamgeName := getImgName(imgURL)
 
-	// https://godoc.org/github.com/disintegration/imaging
-	originalImg, err := imaging.Open("./test.jpg")
+	// You can now save it to disk or whatever...
+	ioutil.WriteFile("./"+iamgeName, imageData, 0666)
+
+	originalImg, _ := imaging.Open("./" + iamgeName)
+	iw, ih := getImgWidthAndHeight(originalImg)
+
 	effect1 := imaging.Blur(originalImg, 2)
 	effect2 := imaging.Invert(originalImg)
 
-	dst := imaging.New(512, 512, color.NRGBA{0, 0, 0, 0})
+	dst := imaging.New(iw, ih, color.NRGBA{0, 0, 0, 0})
 	dst = imaging.Paste(dst, effect1, image.Pt(0, 0))
 	dst = imaging.Paste(dst, effect2, image.Pt(256, 0))
 
